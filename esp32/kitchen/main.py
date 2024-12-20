@@ -1,6 +1,6 @@
 from dfplayermini import Player
 from DIYables_MicroPython_Button import Button
-from time import sleep
+from time import sleep, time
 import network
 import espnow
 from machine import Pin
@@ -8,8 +8,7 @@ from machine import Pin
 
 # Enable the Mini MP3 DFPlayer
 player = Player(pin_TX=17, pin_RX=16)
-player.volume(10)
-player.module_sleep()
+player.volume(30)
 
 led = Pin(2, Pin.OUT)
 pared_led = Pin(18, Pin.OUT)
@@ -40,6 +39,28 @@ def play_yes():
     player.play(3)
     player.module_sleep()
 
+def send_request(data):
+    print("Надсилаю запит...")
+    e.send(peer, data)
+    print("Чекаю на відповідь...")
+    led.on()
+    
+    start_time = time()
+    while time() - start_time < 20:  # Чекаємо максимум 20 секунд
+        dinner_btn.loop() # inform about loop
+        come_btn.loop() # inform about loop
+        
+        if e.any():
+            host, msg = e.recv()
+            if msg:
+                print(f"Отримано відповідь від сервера!: {msg}")
+                led.off()
+                return msg
+    print("Час очікування вийшов!")
+    led.off()
+    return None
+
+
 # A WLAN interface must be active to send()/recv()
 sta = network.WLAN(network.WLAN.IF_STA)
 sta.active(True)
@@ -48,45 +69,43 @@ sta.active(True)
 e = espnow.ESPNow()
 e.active(True)
 
-pared = False 
 peer = b'<\x8a\x1f\x9d\x1e\x1c'   # MAC address of peer's wifi interface
 e.add_peer(peer)      # Must add_peer() before send()
-
-for i in range(30):
-    e.send(peer, "pare", True) # Ping the second ESP
-    print(f"Trying to pare: {i}...")
-    
-    host, msg = e.recv()
-    if msg: # msg == None if timeout in recv()
-        if msg == "accept": # if paring is successful
-            pared = True
-            pared_led.on()
-            print("Pare created!")
-            break
-    
-    sleep(1) # wait a second to save battery
 
 while True:
     dinner_btn.loop() # inform about loop
     come_btn.loop() # inform about loop
     
     if dinner_btn.is_pressed():
-        print("The dinner button is pressed")
-        led.on()
-
-    if dinner_btn.is_released():
-        print("The dinner button is released")
+        print("The come button is pressed")
+        success = send_request(b'dinner')
+        if success:
+            print(f"Операція успішна!: {success}")
+            if success == b'yes':
+                player.play(3)
+            elif success == b'wait':
+                player.play(2)
+            elif success == b'no':
+                player.play(1)
+            else:
+                pared_led.on()
+        else:
+            print("Не вдалося отримати відповідь.")
     
     if come_btn.is_pressed():
         print("The come button is pressed")
-        led.off()
-
-    if come_btn.is_released():
-        print("The come button is released")
-    
-    if pared:
-        pass
-    else:
-        break
+        success = send_request(b'come')
+        if success:
+            print(f"Операція успішна!: {success}")
+            if success == b'yes':
+                player.play(3)
+            elif success == b'wait':
+                player.play(2)
+            elif success == b'no':
+                player.play(1)
+            else:
+                pared_led.on()
+        else:
+            print("Не вдалося отримати відповідь.")
         
 e.send(peer, b'end', True)

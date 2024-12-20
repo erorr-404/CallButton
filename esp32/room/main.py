@@ -1,6 +1,6 @@
 from dfplayermini import Player
 from DIYables_MicroPython_Button import Button
-from time import sleep
+from time import sleep, time
 import network
 import espnow
 from machine import Pin
@@ -9,12 +9,10 @@ from machine import Pin
 # Enable the Mini MP3 DFPlayer
 player = Player(pin_TX=17, pin_RX=16)
 player.volume(30)
-player.module_sleep()
-
 
 led = Pin(2, Pin.OUT)
 
-accept_btn = Button(16)
+accept_btn = Button(22)
 accept_btn.set_debounce_time(100)  # Set debounce time to 100 milliseconds
 
 wait_btn = Button(19)
@@ -46,56 +44,68 @@ sta.active(True)
 e = espnow.ESPNow()
 e.active(True)
 
-# Print device mac-address
-print(sta.config('mac').hex())
-print(sta.config('mac'))
+peer = b'<\x8a\x1f\x9b\xcd\x00'   # MAC address of peer's wifi interface
+e.add_peer(peer)      # Must add_peer() before send()
 
-def wait_for_user_answear():
-    for i in range(15):
+def wait_for_button():
+    print("Чекаю на натискання кнопки...")
+    start_time = time()
+    while time() - start_time < 15:  # Чекаємо максимум 15 секунд
         accept_btn.loop()
         wait_btn.loop()
         reject_btn.loop()
-        print(f"Waiting for user response: {i}...")
         
-        # todo: make esp return a response
         if accept_btn.is_pressed():
-            print("User accepted request") 
+            print("User accepted request")
+            return b'yes'
         
         if wait_btn.is_pressed():
             print("User delayed request")
+            return b'wait'
         
         if reject_btn.is_pressed():
             print("User rejected request")
+            return b'no'
 
-pared = False 
-peer = None # peer mac
+    print("Час очікування вийшов!")
+    return None
 
 while True:
+    accept_btn.loop()
+    wait_btn.loop()
+    reject_btn.loop()
+    
     host, msg = e.recv()
     
     if msg: # msg == None if timeout in recv()
+        print(f"HOST: {host}; MSG: {msg}")
         
-        if msg == b'pare': # command to create peer for 2-way connection
-        print("Got pare command")
-            if peer is None: # if it is the first message
-                peer = host # save mac address
-                e.add_peer(peer) # peer with device
-                e.send(peer, "accept", True) # return that paring is succesful
-                pared = True
-                led.on()
-                print("Successfully pared")
-        
-        elif msg == b'dinner':,
+        if msg == b'dinner':
             print("Got dinner command")
-            play_dinner_ready()
-            for i in range(15):
-                
-                # todo: wait for user to press the button and return response
+            led.on()
+            player.play(2)
+            
+            resp = wait_for_button()
+            if resp:
+                e.send(peer, resp)
+                print("Відповідь надіслано!")
+            else:
+                print("Кнопка не була натиснута. Відповідь не надіслана.")
+
         
         elif msg == b'come':
             print("Got come command")
-            play_come_here()
-            # todo: wait for user to press the button and return response
+            led.on()
+            player.play(1)
+            
+            resp = wait_for_button()
+            if resp:
+                e.send(peer, resp)
+                print("Відповідь надіслано!")
+            else:
+                print("Кнопка не була натиснута. Відповідь не надіслана.")
         
         elif msg == b'end':
             break
+        
+        led.off()
