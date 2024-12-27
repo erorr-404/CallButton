@@ -4,6 +4,7 @@ from time import sleep, time
 import network
 import espnow
 from machine import Pin
+import esp32
 
 
 # Enable the Mini MP3 DFPlayer
@@ -13,10 +14,10 @@ player.volume(30)
 led = Pin(2, Pin.OUT)
 pared_led = Pin(18, Pin.OUT)
 
-dinner_btn = Button(21)
+dinner_btn = Button(4)
 dinner_btn.set_debounce_time(100)  # Set debounce time to 100 milliseconds
 
-come_btn = Button(19)
+come_btn = Button(15)
 come_btn.set_debounce_time(100)  # Set debounce time to 100 milliseconds
 
 
@@ -77,6 +78,7 @@ while True:
     come_btn.loop() # inform about loop
     
     if dinner_btn.is_pressed():
+        led.on()
         print("The come button is pressed")
         success = send_request(b'dinner')
         if success:
@@ -93,6 +95,7 @@ while True:
             print("Не вдалося отримати відповідь.")
     
     if come_btn.is_pressed():
+        led.on()
         print("The come button is pressed")
         success = send_request(b'come')
         if success:
@@ -107,5 +110,7 @@ while True:
                 pared_led.on()
         else:
             print("Не вдалося отримати відповідь.")
+    
+    led.off()
         
 e.send(peer, b'end', True)
