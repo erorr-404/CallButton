@@ -23,22 +23,19 @@ come_btn.set_debounce_time(100)  # Set debounce time to 100 milliseconds
 
 # Play sound and go sleep
 def play_no():
-    player.module_wake()
+    print("Відтворення файлу...")
     player.play(1)
-    player.module_sleep()
 
 
 # Play sound and go sleep
 def play_5_mins():
-    player.module_wake()
+    print("Відтворення файлу...")
     player.play(2)
-    player.module_sleep()
 
 # Play sound and go sleep
 def play_yes():
-    player.module_wake()
+    print("Відтворення файлу...")
     player.play(3)
-    player.module_sleep()
 
 def send_request(data):
     print("Надсилаю запит...")
@@ -84,11 +81,11 @@ while True:
         if success:
             print(f"Операція успішна!: {success}")
             if success == b'yes':
-                player.play(3)
+                play_yes()
             elif success == b'wait':
-                player.play(2)
+                play_5_mins()
             elif success == b'no':
-                player.play(1)
+                play_no()
             else:
                 pared_led.on()
         else:
@@ -101,11 +98,11 @@ while True:
         if success:
             print(f"Операція успішна!: {success}")
             if success == b'yes':
-                player.play(3)
+                play_yes()
             elif success == b'wait':
-                player.play(2)
+                play_5_mins()
             elif success == b'no':
-                player.play(1)
+                play_no()
             else:
                 pared_led.on()
         else:
