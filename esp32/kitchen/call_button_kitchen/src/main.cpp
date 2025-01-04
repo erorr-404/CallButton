@@ -1,6 +1,6 @@
+#include <Arduino.h>
 #include <DFRobotDFPlayerMini.h>
 #include <esp_now.h>
-#include "Arduino.h"
 #include <WiFi.h>
 #include "esp_task_wdt.h"
 
@@ -12,23 +12,23 @@ DFRobotDFPlayerMini player;
 const int ledPin = 2;
 
 // Buttons
-const int acceptBtnPin = 22;
-const int waitBtnPin = 19;
-const int rejectBtnPin = 21;
+const int dinnerBtnPin = 4;
+const int comeBtnPin = 15;
 
 // Button states
-bool acceptBtnPressed = false;
-bool waitBtnPressed = false;
-bool rejectBtnPressed = false;
+bool dinnerBtnPressed = false;
+bool comeBtnPressed = false;
 
 // ESP-NOW
-uint8_t peerAddress[] = {0x3C, 0x8A, 0x1F, 0x9B, 0xCD, 0x00};
+uint8_t peerAddress[] = {0x8a, 0x1f, 0x9d, 0x1e, 0x1c};
 
+// Function declarations
+void sendRequest(const char *message);
 void onReceive(const uint8_t *macAddr, const uint8_t *data, int len);
-void sendResponse(const char *message);
-void playComeHere();
-void playDinnerReady();
-const char *waitForButton();
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
+void playYes();
+void playWait();
+void playNo();
 
 void setup() {
   // Initialize serial for debugging and DFPlayer Mini communication
@@ -50,11 +50,12 @@ void setup() {
 
   // Initialize LED
   pinMode(ledPin, OUTPUT);
+  Serial.println("Led initialized.");
 
   // Initialize buttons
-  pinMode(acceptBtnPin, INPUT_PULLUP);
-  pinMode(waitBtnPin, INPUT_PULLUP);
-  pinMode(rejectBtnPin, INPUT_PULLUP);
+  pinMode(dinnerBtnPin, INPUT_PULLUP);
+  pinMode(comeBtnPin, INPUT_PULLUP);
+  Serial.println("Buttons initialized.");
 
   // Initialize Wi-Fi in station mode
   WiFi.mode(WIFI_STA);
@@ -62,6 +63,7 @@ void setup() {
     Serial.println("Error initializing ESP-NOW");
     return;
   }
+  Serial.println("ESP-NOW initialized.");
 
   // Register peer
   esp_now_peer_info_t peerInfo = {};
@@ -77,19 +79,24 @@ void setup() {
   // Register callback for receiving data
   esp_now_register_recv_cb(onReceive);
 
-  // Allow operations to block ESP for 16 seconds
-  esp_task_wdt_init(16, true);
+  // Allow operations to block ESP for 21 seconds
+  esp_task_wdt_init(21, true);
+  Serial.println("ESP Task WDT initialized.");
 }
 
 void loop() {
   // Poll buttons
-  acceptBtnPressed = digitalRead(acceptBtnPin) == LOW;
-  waitBtnPressed = digitalRead(waitBtnPin) == LOW;
-  rejectBtnPressed = digitalRead(rejectBtnPin) == LOW;
+  comeBtnPressed = digitalRead(comeBtnPin) == LOW;
+  dinnerBtnPressed = digitalRead(dinnerBtnPin) == LOW;
 }
 
-// void onReceive(const uint8_t *macAddr, const uint8_t *data, int len);
+void sendRequest(const char *message) {
+  Serial.println("Sending ESP-NOW request...");
+  esp_now_send(peerAddress, (uint8_t *)message, strlen(message));
+}
+
 void onReceive(const uint8_t *macAddr, const uint8_t *data, int len) {
+  // Get MAC-address
   char macStr[18];
   snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
          macAddr[0], macAddr[1], macAddr[2],
@@ -98,6 +105,7 @@ void onReceive(const uint8_t *macAddr, const uint8_t *data, int len) {
   Serial.print("Received message from: ");
   Serial.println(macStr);
 
+  // Get received message
   String message = "";
   for (int i = 0; i < len; i++) {
     message += (char)data[i];
@@ -106,60 +114,36 @@ void onReceive(const uint8_t *macAddr, const uint8_t *data, int len) {
   Serial.print("Message: ");
   Serial.println(message);
 
-  digitalWrite(ledPin, HIGH);
-
-  if (message == "dinner") {
-    playDinnerReady();
-    const char *response = waitForButton();
-    sendResponse(response);
-  } else if (message == "come") {
-    playComeHere();
-    const char *response = waitForButton();
-    sendResponse(response);
-  } else if (message == "end") {
-    Serial.println("End command received.");
+  if (message == "yes") {
+    Serial.println("Playing yes...");
+    playYes();
+  } else if (message == "wait") {
+    Serial.println("Playing wait...");
+    playWait();
+  } else if (message == "no") {
+    Serial.println("Playing no...");
+    playNo();
+  } else {
+    Serial.println("Wrong messaage.");
   }
-
-  digitalWrite(ledPin, LOW);
 }
 
-
-void sendResponse(const char *message) {
-  esp_now_send(peerAddress, (uint8_t *)message, strlen(message));
+void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
+  Serial.print("\r\nLast Packet Send Status:\t");
+  Serial.println(status == ESP_NOW_SEND_SUCCESS ? "Delivery Success" : "Delivery Fail");
 }
 
-
-const char *waitForButton() {
-  Serial.println("Waiting for button press...");
-  unsigned long startTime = millis();
-
-  while (millis() - startTime < 15000) { // 15 seconds timeout
-    if (acceptBtnPressed) {
-      Serial.println("User accepted request");
-      return "yes";
-    }
-    if (waitBtnPressed) {
-      Serial.println("User delayed request");
-      return "wait";
-    }
-    if (rejectBtnPressed) {
-      Serial.println("User rejected request");
-      return "no";
-    }
-
-    yield(); // For deblocking
-  }
-
-  Serial.println("Timeout waiting for button");
-  return "none";
-}
-
-void playComeHere() {
-  player.play(1);
+void playYes() {
+  player.play(3);
   delay(1000);
 }
 
-void playDinnerReady() {
+void playWait() {
   player.play(2);
+  delay(1000);
+}
+
+void playNo() {
+  player.play(1);
   delay(1000);
 }
