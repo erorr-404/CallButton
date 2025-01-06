@@ -19,8 +19,12 @@ const int comeBtnPin = 15;
 bool dinnerBtnPressed = false;
 bool comeBtnPressed = false;
 
+bool dinnerBtnPrev = false;
+bool comeBtnPrev = false;
+
 // ESP-NOW
-uint8_t peerAddress[] = {0x8a, 0x1f, 0x9d, 0x1e, 0x1c};
+uint8_t peerAddress[] = {0x3c, 0x8a, 0x1f, 0x9d, 0x1e, 0x1c};
+bool waitingResponse = false;
 
 // Function declarations
 void sendRequest(const char *message);
@@ -29,6 +33,7 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status);
 void playYes();
 void playWait();
 void playNo();
+void printDetail(uint8_t type, int value);
 
 void setup() {
   // Initialize serial for debugging and DFPlayer Mini communication
@@ -46,7 +51,7 @@ void setup() {
     }
   }
   Serial.println(F("DFPlayer Mini online."));
-  player.volume(10);
+  player.volume(30);
 
   // Initialize LED
   pinMode(ledPin, OUTPUT);
@@ -78,6 +83,7 @@ void setup() {
 
   // Register callback for receiving data
   esp_now_register_recv_cb(onReceive);
+  esp_now_register_send_cb(OnDataSent);
 
   // Allow operations to block ESP for 21 seconds
   esp_task_wdt_init(21, true);
@@ -88,10 +94,63 @@ void loop() {
   // Poll buttons
   comeBtnPressed = digitalRead(comeBtnPin) == LOW;
   dinnerBtnPressed = digitalRead(dinnerBtnPin) == LOW;
+
+  // Come button action
+  if (comeBtnPressed && !comeBtnPrev) {
+    unsigned long int pressTime = millis();
+    Serial.println("Come button pressed.");
+    sendRequest("come");
+    digitalWrite(ledPin, HIGH);
+    
+    // Wait 20 seconds for request
+    while (millis() - pressTime < 20000) {
+      if (waitingResponse){
+        delay(0);
+      } else {
+        break;
+      }
+    }
+    
+    Serial.println("20-seconds have been passed.");
+    waitingResponse = false;
+    digitalWrite(ledPin, LOW);
+  }
+
+  // Dinner button action
+  if (dinnerBtnPressed && !dinnerBtnPrev) {
+    unsigned long int pressTime = millis();
+    Serial.println("Dinner button pressed.");
+    sendRequest("dinner");
+    digitalWrite(ledPin, HIGH);
+   
+    // Wait 20 seconds for request
+    while (millis() - pressTime < 20000) {
+      if (waitingResponse){
+        delay(0);
+      } else {
+        break;
+      }
+    }
+
+    Serial.println("20-seconds have been passed.");
+    waitingResponse = false;
+    digitalWrite(ledPin, LOW);
+  }
+
+  // Save button states
+  comeBtnPrev = comeBtnPressed;
+  dinnerBtnPrev = dinnerBtnPressed;
+
+  // Print DFPlayer status
+  if (player.available()) {
+    printDetail(player.readType(), player.read()); //Print the detail message from DFPlayer to handle different errors and states.
+  }
 }
 
+// Send message to second device
 void sendRequest(const char *message) {
   Serial.println("Sending ESP-NOW request...");
+  waitingResponse = true;
   esp_now_send(peerAddress, (uint8_t *)message, strlen(message));
 }
 
@@ -126,6 +185,9 @@ void onReceive(const uint8_t *macAddr, const uint8_t *data, int len) {
   } else {
     Serial.println("Wrong messaage.");
   }
+
+  waitingResponse = false;
+  digitalWrite(ledPin, LOW);
 }
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
@@ -134,16 +196,78 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 }
 
 void playYes() {
-  player.play(3);
+  player.play(1);
   delay(1000);
 }
 
 void playWait() {
-  player.play(2);
+  player.play(3);
   delay(1000);
 }
 
 void playNo() {
-  player.play(1);
+  player.play(2);
   delay(1000);
+}
+
+void printDetail(uint8_t type, int value){
+  switch (type) {
+    case TimeOut:
+      Serial.println(F("Time Out!"));
+      break;
+    case WrongStack:
+      Serial.println(F("Stack Wrong!"));
+      break;
+    case DFPlayerCardInserted:
+      Serial.println(F("Card Inserted!"));
+      break;
+    case DFPlayerCardRemoved:
+      Serial.println(F("Card Removed!"));
+      break;
+    case DFPlayerCardOnline:
+      Serial.println(F("Card Online!"));
+      break;
+    case DFPlayerUSBInserted:
+      Serial.println("USB Inserted!");
+      break;
+    case DFPlayerUSBRemoved:
+      Serial.println("USB Removed!");
+      break;
+    case DFPlayerPlayFinished:
+      Serial.print(F("Number:"));
+      Serial.print(value);
+      Serial.println(F(" Play Finished!"));
+      break;
+    case DFPlayerError:
+      Serial.print(F("DFPlayerError:"));
+      switch (value) {
+        case Busy:
+          Serial.println(F("Card not found"));
+          break;
+        case Sleeping:
+          Serial.println(F("Sleeping"));
+          break;
+        case SerialWrongStack:
+          Serial.println(F("Get Wrong Stack"));
+          break;
+        case CheckSumNotMatch:
+          Serial.println(F("Check Sum Not Match"));
+          break;
+        case FileIndexOut:
+          Serial.println(F("File Index Out of Bound"));
+          break;
+        case FileMismatch:
+          Serial.println(F("Cannot Find File"));
+          break;
+        case Advertise:
+          Serial.println(F("In Advertise"));
+          break;
+        default:
+          break;
+      }
+      break;
+    default:
+      break;
+  }
+  
 }
