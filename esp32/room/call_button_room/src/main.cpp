@@ -35,21 +35,24 @@ void setup() {
   Serial.begin(115200);
   FPSerial.begin(9600, SERIAL_8N1, /*rx =*/16, /*tx =*/17);
 
+  // Initialize LED
+  pinMode(ledPin, OUTPUT);
+
   // Initialize DFPlayer Mini
   Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
-  if (!player.begin(FPSerial, /*isACK = */true, /*doReset = */false)) {  //Use serial to communicate with mp3.
+  if (!player.begin(FPSerial, /*isACK = */false, /*doReset = */false)) {  //Use serial to communicate with mp3.
     Serial.println(F("Unable to begin:"));
     Serial.println(F("1.Please recheck the connection!"));
     Serial.println(F("2.Please insert the SD card!"));
     while(true){
-      delay(0); // Code to compatible with ESP8266 watch dog.
+      digitalWrite(ledPin, HIGH);
+      delay(100);
+      digitalWrite(ledPin, LOW);
+      delay(100);
     }
   }
   Serial.println(F("DFPlayer Mini online."));
   player.volume(10);
-
-  // Initialize LED
-  pinMode(ledPin, OUTPUT);
 
   // Initialize buttons
   pinMode(acceptBtnPin, INPUT_PULLUP);
@@ -134,15 +137,15 @@ const char *waitForButton() {
   unsigned long startTime = millis();
 
   while (millis() - startTime < 15000) { // 15 seconds timeout
-    if (acceptBtnPressed) {
+    if (digitalRead(acceptBtnPin) == LOW) {
       Serial.println("User accepted request");
       return "yes";
     }
-    if (waitBtnPressed) {
+    if (digitalRead(waitBtnPin) == LOW) {
       Serial.println("User delayed request");
       return "wait";
     }
-    if (rejectBtnPressed) {
+    if (digitalRead(rejectBtnPin) == LOW) {
       Serial.println("User rejected request");
       return "no";
     }
