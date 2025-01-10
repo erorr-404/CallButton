@@ -10,6 +10,7 @@ DFRobotDFPlayerMini player;
 
 // LED
 const int ledPin = 2;
+const int activeLedPin = 4;
 
 // Buttons
 const int acceptBtnPin = 22;
@@ -29,6 +30,7 @@ void sendResponse(const char *message);
 void playComeHere();
 void playDinnerReady();
 const char *waitForButton();
+void printDetail(uint8_t type, int value);
 
 void setup() {
   // Initialize serial for debugging and DFPlayer Mini communication
@@ -37,6 +39,7 @@ void setup() {
 
   // Initialize LED
   pinMode(ledPin, OUTPUT);
+  pinMode(activeLedPin, OUTPUT);
 
   // Initialize DFPlayer Mini
   Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
@@ -51,6 +54,13 @@ void setup() {
       delay(100);
     }
   }
+
+  // Wait while DFPlayer is available
+  while (!player.available()) {
+    delay(1000);
+    Serial.println("DFPlayer is not available.");
+  }
+  
   Serial.println(F("DFPlayer Mini online."));
   player.volume(10);
 
@@ -82,6 +92,15 @@ void setup() {
 
   // Allow operations to block ESP for 16 seconds
   esp_task_wdt_init(16, true);
+
+  // Wait 2 seconds to avoid bugs and problems
+  sleep(2000);
+
+  // TODO: imitate onReceive to avoid bug
+  // onReceive(peerAddress, (uint8_t *)"test", strlen("test"));
+
+  // Activate LED to make user understand device is ready to use
+  digitalWrite(activeLedPin, HIGH);
 }
 
 void loop() {
@@ -117,6 +136,11 @@ void onReceive(const uint8_t *macAddr, const uint8_t *data, int len) {
     sendResponse(response);
   } else if (message == "come") {
     playComeHere();
+    const char *response = waitForButton();
+    sendResponse(response);
+  } else if (message == "test") {
+    playComeHere();
+    playDinnerReady();
     const char *response = waitForButton();
     sendResponse(response);
   } else if (message == "end") {
@@ -165,4 +189,68 @@ void playComeHere() {
 void playDinnerReady() {
   player.play(2);
   delay(1000);
+}
+
+void printDetail(uint8_t type, int value){
+  switch (type) {
+    case TimeOut:
+      Serial.println(F("Time Out!"));
+      break;
+    case WrongStack:
+      Serial.println(F("Stack Wrong!"));
+      break;
+    case DFPlayerCardInserted:
+      Serial.println(F("Card Inserted!"));
+      break;
+    case DFPlayerCardRemoved:
+      Serial.println(F("Card Removed!"));
+      break;
+    case DFPlayerCardOnline:
+      Serial.println(F("Card Online!"));
+      break;
+    case DFPlayerUSBInserted:
+      Serial.println("USB Inserted!");
+      break;
+    case DFPlayerUSBRemoved:
+      Serial.println("USB Removed!");
+      break;
+    case DFPlayerPlayFinished:
+      Serial.print(F("Number:"));
+      Serial.print(value);
+      Serial.println(F(" Play Finished!"));
+      break;
+    case DFPlayerError:
+      // Inform user that there is an error
+      digitalWrite(activeLedPin, LOW);
+      Serial.print(F("DFPlayerError:"));
+      switch (value) {
+        case Busy:
+          Serial.println(F("Card not found"));
+          break;
+        case Sleeping:
+          Serial.println(F("Sleeping"));
+          break;
+        case SerialWrongStack:
+          Serial.println(F("Get Wrong Stack"));
+          break;
+        case CheckSumNotMatch:
+          Serial.println(F("Check Sum Not Match"));
+          break;
+        case FileIndexOut:
+          Serial.println(F("File Index Out of Bound"));
+          break;
+        case FileMismatch:
+          Serial.println(F("Cannot Find File"));
+          break;
+        case Advertise:
+          Serial.println(F("In Advertise"));
+          break;
+        default:
+          break;
+      }
+      break;
+    default:
+      break;
+  }
+  
 }
